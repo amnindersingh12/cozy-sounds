@@ -6,11 +6,6 @@
 
 Lofi Engine Studio is a simple app to create and play lo-fi music.
 
-<p align="center">
-  <a href="https://github.com/amnindersingh12/lofi-engine/releases/tag/app-v1.2.0">
-    <img src="" alt="Download">
-  </a>
-</p>
 
 <p align="center">
   <img alt="Screenshot" src="screenshots/demo.png" />
