@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+#ignore pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.venv/*
+.venv-ml/
+.venv-ml311/
+
+# Generated outputs
+output/
+
+# Large training artifacts (keep curated checkpoints under checkpoints/)
+integrations/jacbz-lofi/*.pth
+
+# Exclude upstream integration PNG assets from this repo
+integrations/jacbz-lofi/**/*.png
+# Large local-only recordings
+screenshots/screen-recording.mov

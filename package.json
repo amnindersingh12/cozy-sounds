@@ -1,0 +1,47 @@
+{
+  "name": "LofiEngine",
+  "private": true,
+  "version": "1.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:full": "sh -c 'npm run ml:server:dev & ML_PID=$!; trap \"kill $ML_PID\" EXIT INT TERM; npm run tauri:d'",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "ml:server:dev": "cd integrations/jacbz-lofi && MLPY=../../.venv-ml311/bin/python; [ -x \"$MLPY\" ] || MLPY=../../.venv-ml/bin/python; [ -x \"$MLPY\" ] || MLPY=$(command -v python3); \"$MLPY\" -m flask --app=server/app.py run --host=0.0.0.0 --port=5050",
+    "ml:server:docker": "docker build -f integrations/jacbz-lofi/server/Dockerfile -t lofi-ml integrations/jacbz-lofi && docker run --rm -p 5000:5000 lofi-ml",
+    "ml:model:lofi2lofi:train": "cd integrations/jacbz-lofi && MLPY=../../.venv-ml311/bin/python; [ -x \"$MLPY\" ] || MLPY=../../.venv-ml/bin/python; [ -x \"$MLPY\" ] || MLPY=$(command -v python3); \"$MLPY\" -m model.lofi2lofi_train",
+    "ml:model:lyrics2lofi:embeddings": "cd integrations/jacbz-lofi && MLPY=../../.venv-ml311/bin/python; [ -x \"$MLPY\" ] || MLPY=../../.venv-ml/bin/python; [ -x \"$MLPY\" ] || MLPY=$(command -v python3); \"$MLPY\" -m model.embeddings",
+    "ml:model:lyrics2lofi:train": "cd integrations/jacbz-lofi && MLPY=../../.venv-ml311/bin/python; [ -x \"$MLPY\" ] || MLPY=../../.venv-ml/bin/python; [ -x \"$MLPY\" ] || MLPY=$(command -v python3); \"$MLPY\" -m model.lyrics2lofi_train",
+    "ml:model:dataset:build": "cd integrations/jacbz-lofi/model/dataset && MLPY=../../../../.venv-ml311/bin/python; [ -x \"$MLPY\" ] || MLPY=../../../../.venv-ml/bin/python; [ -x \"$MLPY\" ] || MLPY=$(command -v python3); \"$MLPY\" preprocessor.py",
+    "ml:model:dataset:bootstrap": "node scripts/bootstrap-ml-dataset.mjs",
+    "ml:model:lofi2lofi:quicktrain": "cd integrations/jacbz-lofi && MLPY=../../.venv-ml311/bin/python; [ -x \"$MLPY\" ] || MLPY=../../.venv-ml/bin/python; [ -x \"$MLPY\" ] || MLPY=$(command -v python3); MAX_EPOCHS=1 \"$MLPY\" -m model.lofi2lofi_train",
+    "ml:study:pack": "node scripts/generate-ml-study-pack.mjs",
+    "lofi:video": "node scripts/generate-lofi-video.mjs",
+    "tauri": "tauri",
+    "tauri:d": "tauri dev",
+    "tauri:b": "tauri build"
+  },
+  "dependencies": {
+    "@tabler/icons-svelte": "^2.17.0",
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-http": "~2.3.0",
+    "@tauri-apps/plugin-shell": "~2.3.0",
+    "html2canvas": "^1.4.1",
+    "tone": "^14.7.30"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^2.0.0",
+    "@tauri-apps/cli": "^2.6.1",
+    "@tsconfig/svelte": "^3.0.0",
+    "@types/node": "^18.7.10",
+    "obs-websocket-js": "^5.0.8",
+    "svelte": "^3.54.0",
+    "svelte-check": "^3.0.0",
+    "svelte-preprocess": "^5.0.0",
+    "tslib": "^2.4.1",
+    "typescript": "^4.9.5",
+    "vite": "^4.2.1"
+  }
+}

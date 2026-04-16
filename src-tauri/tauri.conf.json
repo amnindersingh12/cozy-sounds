@@ -1,0 +1,43 @@
+{
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
+  },
+  "bundle": {
+    "active": true,
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "targets": "all"
+  },
+  "productName": "Lofi Engine Studio",
+  "mainBinaryName": "Lofi Engine Studio",
+  "version": "1.2.0",
+  "identifier": "com.amnindersingh12.lofienginestudio",
+  "plugins": {},
+  "app": {
+    "withGlobalTauri": false,
+    "macOSPrivateApi": true,
+    "windows": [
+      {
+        "fullscreen": false,
+        "title": "Lofi Engine Studio",
+        "width": 980,
+        "height": 580,
+        "minWidth": 930,
+        "minHeight": 530,
+        "decorations": false,
+        "transparent": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}
