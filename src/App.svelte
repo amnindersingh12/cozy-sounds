@@ -2,13 +2,6 @@
   import { onMount } from "svelte";
   import { dir, locale } from "./lib/locales/store";
   import PlayButton from "./lib/PlayButton.svelte";
-  import TrackList from "./lib/components/TrackList/index.svelte";
-  import Controls from "./lib/components/Controls/index.svelte";
-  import TopBar from "./lib/components/TopBar/TopBar.svelte";
-  import Info from "./lib/components/InfoBox/Info.svelte";
-  import Config from "./lib/Config.svelte";
-  import ContextMenu from "./lib/components/ContextMenu/ContextMenu.svelte";
-  import Tooltip from "./lib/components/Tooltip.svelte";
   import GlobalRain from "./lib/components/GlobalRain.svelte";
   import { startMlLofiAutoUpdate } from "./lib/ml/jacbzLofiStore";
 
@@ -104,16 +97,7 @@
   <div class="overlay-vignette"></div>
   <GlobalRain />
 
-  <div class="export-chrome"><Config /></div>
-  <div class="export-chrome"><TopBar /></div>
-  <section class="content">
-    <div class="export-chrome"><TrackList /></div>
-    <div class="export-chrome"><Controls /></div>
-    <div class="export-chrome"><Info /></div>
-  </section>
   <PlayButton />
-  <div class="export-chrome"><ContextMenu /></div>
-  <div class="export-chrome"><Tooltip /></div>
 </main>
 
 <style>

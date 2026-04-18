@@ -9,8 +9,10 @@
   import { cubicOut } from "svelte/easing";
 // @ts-ignore
   import * as Tone from "tone";
-  import ChordProgression from "../lib/engine/Chords/ChordProgression";
-  import intervalWeights from "../lib/engine/Chords/IntervalWeights";
+  import ChordProgression from "./engine/Chords/ChordProgression";
+  import Chords from "./engine/Chords/Chords";
+  import Chord from "./engine/Chords/Chord";
+  import intervalWeights from "./engine/Chords/IntervalWeights";
   import Keys from "../lib/engine/Chords/Keys";
   import { fiveToFive } from "../lib/engine/Chords/MajorScale";
   import Hat from "../lib/engine/Drums/Hat";
@@ -20,7 +22,6 @@
   import Piano from "../lib/engine/Piano/Piano";
 
   const STORAGE_KEY = "volumes"; // matches Controls/index.svelte
-  const SONG_MODE_STORAGE_KEY = "SongModeConfig";
   const AUTO_START_KEY = "AutoStartSong";
   const DEFFAULT_VOLUMES = {
     rain: 1,
@@ -79,24 +80,6 @@
       ? true
       : localStorage.getItem(AUTO_START_KEY) === "true";
 
-  type SongMood = "chill" | "balanced" | "energetic";
-  type SongModeConfig = {
-    enabled: boolean;
-    seed: string;
-    key: string;
-    mood: SongMood;
-    density: number;
-  };
-
-  const defaultSongMode: SongModeConfig = {
-    enabled: false,
-    seed: "lofi-seed",
-    key: "AUTO",
-    mood: "balanced",
-    density: 0.33,
-  };
-
-  let songMode: SongModeConfig = loadSongModeConfig();
   let songRng: null | (() => number) = null;
 
   let isRecording = false;
@@ -154,26 +137,6 @@
 
   // Sequences
   let chords, melody, kickLoop, snareLoop, hatLoop;
-
-  function loadSongModeConfig(): SongModeConfig {
-    const saved = localStorage.getItem(SONG_MODE_STORAGE_KEY);
-    if (!saved) {
-      return { ...defaultSongMode };
-    }
-
-    try {
-      const parsed = JSON.parse(saved);
-      return {
-        enabled: !!parsed.enabled,
-        seed: parsed.seed || "lofi-seed",
-        key: parsed.key || "AUTO",
-        mood: parsed.mood || "balanced",
-        density: clamp(Number(parsed.density ?? 0.33), 0.1, 0.95),
-      };
-    } catch {
-      return { ...defaultSongMode };
-    }
-  }
 
   function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
@@ -234,23 +197,22 @@
     };
   }
 
-  function applySongModeConfig(incoming: Partial<SongModeConfig>) {
-    songMode = {
-      ...songMode,
-      ...incoming,
-      seed: (incoming.seed ?? songMode.seed ?? "lofi-seed").trim() || "lofi-seed",
-      density: clamp(Number(incoming.density ?? songMode.density), 0.1, 0.95),
-    };
+  function generateProgression() {
+    const _scale = fiveToFive;
+    const newKey = Keys[Math.floor(random() * Keys.length)];
+    const newScale = Tone.Frequency(newKey + "5")
+      .harmonize(_scale)
+      .map((f) => Tone.Frequency(f).toNote());
+      
+    let newProgression = ChordProgression.generate(8, random);
+    const newScalePos = Math.floor(random() * _scale.length);
 
-    const moodProfile = getMoodProfile(songMode.mood);
-    Tone.Transport.bpm.rampTo(songMode.enabled ? moodProfile.bpm : 156, 0.2);
-    Tone.Transport.swing = songMode.enabled ? moodProfile.swing : 1;
-
-    if (songMode.enabled) {
-      melodyDensity = clamp(songMode.density, 0.1, 0.95);
-    }
-
-    localStorage.setItem(SONG_MODE_STORAGE_KEY, JSON.stringify(songMode));
+    key = newKey;
+    progress = 0;
+    progression = newProgression;
+    scale = newScale;
+    genChordsOnce = true;
+    scalePos = newScalePos;
   }
 
   function setupRecorder() {
@@ -515,7 +477,6 @@
 
   onMount(() => {
     setupRecorder();
-    applySongModeConfig(songMode);
 
     // Setup sequences
     chords = new Tone.Sequence(
@@ -605,11 +566,7 @@
     };
 
     const handleSongModeChange = (e) => {
-      const detail = e.detail || {};
-      applySongModeConfig(detail);
-      if (detail.regenerate) {
-        generateProgression();
-      }
+      generateProgression();
     };
 
     const handleAudioExport = (e) => {
@@ -637,13 +594,17 @@
     // Initialize mode
     autoDJMode = localStorage.getItem("AutoDJMode") || "MUSIC";
 
-    // Auto-change the lofi every 60 seconds — skip if SongMode loop is active (it has its own timer)
+    // Auto-change the lofi every 60 seconds
     autoChangeTimer = setInterval(() => {
-      const songModeCfg = (() => { try { return JSON.parse(localStorage.getItem("SongModeConfig") || "{}"); } catch { return {}; } })();
-      if (isPlaying && autoDJMode !== "MANUAL" && !songModeCfg.loopEnabled) {
-        autoDJTransition();
+      if (!isPlaying) return;
+
+      // Update drum and snare beat every minute as requested
+      rotatePatterns();
+
+      if (autoDJMode !== "MANUAL") {
+        autoDJTransition(true); 
       }
-    }, 60000);
+    }, 60_000);
 
     return () => {
       window.removeEventListener("keydown", handleKeydown);
@@ -680,14 +641,11 @@
   let autoChangeTimer: ReturnType<typeof setInterval> | null = null;
 
   function nextChord() {
-    const nextProgress = progress === progression.length - 1 ? 0 : progress + 1;
-    const moodProfile = getMoodProfile(songMode.mood);
+    const moodProfile = getMoodProfile("balanced");
     const nextKickOff = random() < moodProfile.kickDropChance;
     const nextSnareOff = random() < moodProfile.snareDropChance;
     const nextHatOff = random() < moodProfile.hatDropChance;
-    const nextMelodyDensity = songMode.enabled
-      ? clamp(songMode.density + (random() - 0.5) * 0.14, 0.1, 0.95)
-      : random() * 0.3 + 0.2;
+    const nextMelodyDensity = random() * 0.3 + 0.2;
     const nextMelodyOff = random() < moodProfile.melodyDropChance;
 
     if (progress === 4) {
@@ -725,7 +683,7 @@
     countdownFrame = requestAnimationFrame(tickCountdown);
   }
 
-  function autoDJTransition() {
+  function autoDJTransition(skipRotation = false) {
     if(isTransitioning) return; // Prevent overlaps
     if(autoDJMode === "MANUAL") return;
 
@@ -736,10 +694,8 @@
     
     // Original Instrument Logic (Applied in ALL active modes: MUSIC, ATMOSPHERE, WORLD)
     // This was the "current main lofi track generation"
-    const moodProfile = getMoodProfile(songMode.mood);
-    melodyDensity = songMode.enabled
-      ? clamp(songMode.density + (random() - 0.5) * 0.2, 0.1, 0.95)
-      : 0.2 + random() * 0.5;
+    const moodProfile = getMoodProfile("balanced");
+    melodyDensity = 0.2 + random() * 0.5;
     kickOff = random() < moodProfile.kickDropChance;
     snareOff = random() < moodProfile.snareDropChance;
     hatOff = random() < moodProfile.hatDropChance;
@@ -766,7 +722,9 @@
     }
 
     // Rotate drum patterns
-    rotatePatterns();
+    if (!skipRotation) {
+      rotatePatterns();
+    }
 
     // Crossfade FX
     lpf.frequency.linearRampTo(300, 2);
@@ -794,6 +752,8 @@
     pn.triggerAttackRelease(notes, "1n");
     nextChord();
   }
+
+  let melodyProgress = 0;
 
   function playMelody() {
     if (melodyOff || !(random() < melodyDensity)) {
@@ -843,32 +803,7 @@
     pn.triggerAttackRelease(scale[newScalePos], "2n");
   }
 
-  function generateProgression() {
-    const _scale = fiveToFive;
-    generationCount += 1;
-    if (songMode.enabled) {
-      songRng = createRng(hashSeed(`${songMode.seed}-${generationCount}`));
-    } else {
-      songRng = null;
-    }
 
-    const newKey =
-      songMode.enabled && songMode.key !== "AUTO"
-        ? songMode.key
-        : Keys[Math.floor(random() * Keys.length)];
-    const newScale = Tone.Frequency(newKey + "5")
-      .harmonize(_scale)
-      .map((f) => Tone.Frequency(f).toNote());
-    const newProgression = ChordProgression.generate(8, random);
-    const newScalePos = Math.floor(random() * _scale.length);
-
-    key = newKey;
-    progress = 0;
-    progression = newProgression;
-    scale = newScale;
-    genChordsOnce = true;
-    scalePos = newScalePos;
-  }
 
   function toggle() {
     progress = 0;

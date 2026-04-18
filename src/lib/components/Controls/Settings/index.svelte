@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import Background from "./Background.svelte";
   import Volume from "./Volume.svelte";
-  import SongMode from "./SongMode.svelte";
+
 
   import { t, locale, setLocale } from "../../../locales/store";
 
@@ -73,7 +73,7 @@
       <div class="settings-content">
         <Background />
         <Volume />
-        <SongMode />
+
         <div class="section language-section">
           <h4>{$t.settings.language.title}</h4>
           <div class="lang-switcher">
