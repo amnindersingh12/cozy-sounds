@@ -92,7 +92,14 @@
   <div
     class="context-menu glass"
     style="top: {y}px; left: {x}px;"
+    role="menu"
+    tabindex="0"
     on:click|stopPropagation
+    on:keydown={(event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        visible = false;
+      }
+    }}
     on:contextmenu|preventDefault
   >
     <button class="menu-item" on:click={togglePlay}>

@@ -13,14 +13,8 @@
 
   let barType = "generic" as "mac" | "generic" | "hidden";
   let noSideEffect = false; // Disable app controls changes side effects
-  let isUiHidden = localStorage.getItem("UIControlsHidden") === "true";
 
   onMount(() => {
-    const handleUiVisibility = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      isUiHidden = !!customEvent.detail?.hidden;
-    };
-
     const userAgent = navigator.userAgent || "";
     const platform = navigator.platform || "";
 
@@ -49,14 +43,10 @@
       barType = "generic";
     }
 
-    window.addEventListener("lofi-ui-visibility-changed", handleUiVisibility);
-    return () => {
-      window.removeEventListener("lofi-ui-visibility-changed", handleUiVisibility);
-    };
   });
 </script>
 
-{#if barType !== "hidden" && !isUiHidden}
+{#if barType !== "hidden"}
   <div class="titlebar glass" data-tauri-drag-region>
     {#if barType == "mac"}
       <MacControls {noSideEffect} {appWindow} />

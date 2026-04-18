@@ -12,6 +12,7 @@
   const MAX_DIMENSION = 1920;
   const WEBP_QUALITY  = 0.85;
   const MAX_FILE_MB   = 20;
+  const BG_IMAGE_CSS_VAR = "--app-background-image";
 
   // get id from localstorage
   let id: any = localStorage.getItem("bg-id") || 10;
@@ -109,6 +110,10 @@
     localDB.setItem("custom-backgrounds", JSON.stringify(customBackgrounds));
   }
 
+  function setBackgroundImage(target: HTMLElement, source: string) {
+    target.style.setProperty(BG_IMAGE_CSS_VAR, `url('${source}')`);
+  }
+
   function selectCustomBackground(bg: any) {
     applyBackground({
       id: bg.id,
@@ -132,7 +137,7 @@
         localStorage.setItem("bg-type", "default");
         localStorage.removeItem("custom-bg-id");
         const bgElement = document.getElementById("bg");
-        if (bgElement) bgElement.style.backgroundImage = `url('assets/background/bg${id}.webp')`;
+        if (bgElement) setBackgroundImage(bgElement, `assets/background/bg${id}.webp`);
       }
     }
   }
@@ -184,7 +189,7 @@
     if (bgType === "custom" && customBgId) {
       const customBg = customBackgrounds.find((bg) => bg.id === customBgId);
       if (customBg) {
-        bg.style.backgroundImage = `url('${customBg.dataUrl}')`;
+        setBackgroundImage(bg, customBg.dataUrl);
         return;
       } else {
         bgType = "default";
@@ -192,7 +197,7 @@
         localStorage.removeItem("custom-bg-id");
       }
     }
-    bg.style.backgroundImage = `url('assets/background/bg${id}.webp')`;
+    setBackgroundImage(bg, `assets/background/bg${id}.webp`);
   }
 
   function nextBg() {
@@ -222,7 +227,7 @@
 
     const img = new Image();
     img.onload = () => {
-      bg.style.backgroundImage = `url('${background.url}')`;
+      setBackgroundImage(bg, background.url);
       isTransitioning = false;
     };
     img.onerror = () => { isTransitioning = false; };

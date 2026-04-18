@@ -1,6 +1,6 @@
 {
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "sh -c 'if curl -sf http://localhost:1420 >/dev/null 2>&1; then echo \"Vite already healthy on :1420, reusing it\"; else pnpm dev; fi'",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420"

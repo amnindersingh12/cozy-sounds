@@ -98,7 +98,45 @@ Build output is created in `src-tauri/target/release`.
 - `pnpm build` - Build frontend only.
 - `pnpm preview` - Preview frontend build.
 - `pnpm check` - Run Svelte type checks.
+- `pnpm ml:generate:loop` - Continuously generate new jacbz-lofi tracks (default every 240 seconds).
 - `pnpm lofi:video -- --visual <clip> --audio <track> --duration <sec> --output <file>` - Generate a longer lo-fi video.
+
+### Paired Visuals + 4-Minute Video Loops
+
+Use the loop generator to automatically assign a matching background image to each generated track. If you also have a matching audio file for each track, the script can export synchronized 4-minute MP4 loops.
+
+```bash
+pnpm ml:generate:loop -- \
+  --interval 240 \
+  --source mixed \
+  --export-video \
+  --audio-dir ./output/rendered-audio \
+  --video-dir ./output/generated-lofi/videos
+```
+
+The generator writes a JSON record for each track with the selected visual metadata, then renders an MP4 when the corresponding `track-0001.wav`-style audio file exists in the audio directory.
+
+## Auto-Generate New Lo-Fi Every 4 Minutes
+
+1. Start the ML server:
+
+```bash
+pnpm ml:server:dev
+```
+
+2. In another terminal, run the loop generator:
+
+```bash
+pnpm ml:generate:loop -- --interval 240 --source mixed
+```
+
+Tracks are written to `output/generated-lofi/` as JSON files.
+
+Optional:
+
+- Add `--count 15` to stop after 15 tracks.
+- Use `--source generate` for pure random latent generation.
+- Use `--source predict` for prompt-guided generation only.
 
 ## Full Video Export (3 to 5 Minutes)
 
@@ -129,6 +167,7 @@ Notes:
 This repo includes an integration of an upstream project:
 
 - Core app baseline and structure are from [meel-hd/lofi-engine](https://github.com/meel-hd/lofi-engine).
+- Upstream repository URL: https://github.com/meel-hd/lofi-engine
 - `integrations/jacbz-lofi` is based on [jacbz/Lofi](https://github.com/jacbz/Lofi) (Apache-2.0).
 - The upstream license is kept in `integrations/jacbz-lofi/LICENSE`.
 - Workspace integration notes are in `integrations/jacbz-lofi/WORKSPACE_INTEGRATION.md`.

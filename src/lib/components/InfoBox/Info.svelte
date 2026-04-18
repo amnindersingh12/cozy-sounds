@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { IconEye, IconX } from "@tabler/icons-svelte";
+  import { IconX } from "@tabler/icons-svelte";
   import ShortCuts from "./ShortCuts.svelte";
   import SocialLinks from "./SocialLinks.svelte";
   import { onMount } from "svelte";
@@ -28,10 +28,6 @@
     false,
   );
 
-  function showNextTime() {
-    localStorage.removeItem("shownBefore-info");
-  }
-
   onMount(() => {
     window.addEventListener("lofi-toggle-info", toggleInfoBox);
     return () => {
@@ -46,13 +42,6 @@
       <div id="top-section">
         <button id="close-btn" on:click={toggleInfoBox}>
           <IconX color="white" size={17} />
-        </button>
-        <button
-          id="show-btn"
-          data-tooltip={$t.info.buttons.show_next_time}
-          on:click={showNextTime}
-        >
-          <IconEye color="white" size={17} />
         </button>
         <div id="app-info">
           <img id="app-logo" src="LofiEngine.png" alt="" />
@@ -103,12 +92,6 @@
     position: absolute;
     top: 10px;
     right: 0;
-    outline: none;
-  }
-  #show-btn {
-    position: absolute;
-    top: 10px;
-    right: 35px;
     outline: none;
   }
   button:active {

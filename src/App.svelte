@@ -9,47 +9,76 @@
   import Config from "./lib/Config.svelte";
   import ContextMenu from "./lib/components/ContextMenu/ContextMenu.svelte";
   import Tooltip from "./lib/components/Tooltip.svelte";
+  import GlobalRain from "./lib/components/GlobalRain.svelte";
+  import { startMlLofiAutoUpdate } from "./lib/ml/jacbzLofiStore";
 
   let isExporting = false;
 
+  const ENDPOINTS = [
+    "waifu", "neko", "shinobu", "bully", "cry", "hug", "kiss", "smug",
+    "highfive", "nom", "bite", "slap", "wink", "poke", "dance", "cringe",
+    "blush", "happy"
+  ];
+  const REMOTE_BASE = "https://waifu.vercel.app/sfw/";
+
+  const preloadAndApply = (target: HTMLElement, url: string) => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        target.style.setProperty("--app-background-image", `url('${url}')`);
+        resolve(true);
+      };
+      img.onerror = () => resolve(false);
+      img.src = url;
+    });
+  };
+
   onMount(() => {
-    // Initialize direction
-    document.documentElement.dir = $dir;
-    document.documentElement.lang = $locale;
-
+    startMlLofiAutoUpdate();
+    let disposed = false;
     const bgEl = document.getElementById("bg");
-    const bgType = localStorage.getItem("bg-type") || "default";
 
-    if (bgEl) {
-      if (bgType === "custom") {
-        const customBgId = localStorage.getItem("custom-bg-id");
-        if (customBgId) {
-          import("./lib/localDB").then(async ({ default: localDB }) => {
-            const saved = await localDB.getItem("custom-backgrounds");
-            if (saved) {
-              const customs = JSON.parse(saved) as Array<{ id: string; dataUrl: string }>;
-              const match   = customs.find((b) => b.id === customBgId);
-              if (match) {
-                const img  = new Image();
-                img.onload = () => {
-                  bgEl.style.backgroundImage = `url('${match.dataUrl}')`;
-                };
-                img.src = match.dataUrl;
-              }
-            }
-          });
-        }
-      } else {
-        const id  = localStorage.getItem("bg-id") || "10";
-        const src = `assets/background/bg${id}.webp`;
-        const img = new Image();
-        img.onload = () => {
-          bgEl.style.backgroundImage = `url('${src}')`;
-        };
-        img.src = src;
+    const refreshBackground = async () => {
+      if (!bgEl || disposed) return;
+      
+      const ep = ENDPOINTS[Math.floor(Math.random() * ENDPOINTS.length)];
+      const url = `${REMOTE_BASE}${ep}?ts=${Date.now()}`;
+      
+      const success = await preloadAndApply(bgEl, url);
+      
+      // Fallback to local if remote fails
+      if (!success) {
+        const localId = Math.floor(Math.random() * 10) + 1;
+        bgEl.style.setProperty("--app-background-image", `url('assets/background/bg${localId}.webp')`);
       }
-    }
+    };
+
+    // Initial load
+    refreshBackground();
+
+    // Rotate on every transition
+    window.addEventListener("lofi-transition-fired", refreshBackground);
+
+    // #8 — Periodic rotation every 60 seconds
+    const interval = setInterval(refreshBackground, 60_000);
+
+    // Also handle manual overrides from settings if needed
+    const handleBgChanged = (e: CustomEvent) => {
+      const id = e.detail?.id;
+      if (id && bgEl && !disposed) {
+        bgEl.style.setProperty("--app-background-image", `url('assets/background/bg${id}.webp')`);
+      }
+    };
+    window.addEventListener("lofi-bg-changed", handleBgChanged as EventListener);
+
+    return () => {
+      disposed = true;
+      clearInterval(interval);
+      window.removeEventListener("lofi-transition-fired", refreshBackground);
+      window.removeEventListener("lofi-bg-changed", handleBgChanged as EventListener);
+    };
   });
+
 
   onMount(() => {
     const handleExportState = (event: CustomEvent) => {
@@ -68,9 +97,13 @@
       document.documentElement.lang = $locale;
     }
   }
+
 </script>
 
 <main id="bg" class:exporting={isExporting} class="container">
+  <div class="overlay-vignette"></div>
+  <GlobalRain />
+
   <div class="export-chrome"><Config /></div>
   <div class="export-chrome"><TopBar /></div>
   <section class="content">
@@ -85,50 +118,51 @@
 
 <style>
   .container {
-    max-width: 100vw;
-    max-height: 100vh;
+    width: 100vw;
     height: 100vh;
     position: relative;
     overflow: hidden;
-    background-color: #0a0a0a;
-    background-repeat: no-repeat;
-    background-size: cover;
-    background-position: center;
+    background-color: #050505;
+    --app-background-image: url("assets/background/bg10.webp");
     isolation: isolate;
-    transition: background-image 0.3s ease;
   }
 
+  /* Immersive blurred background fill */
   .container::before {
     content: "";
     position: absolute;
-    inset: 0;
-    background:
-      linear-gradient(145deg, rgba(18, 11, 9, 0.68), rgba(18, 11, 9, 0.18) 35%, rgba(33, 18, 14, 0.12) 62%, rgba(7, 10, 16, 0.44)),
-      radial-gradient(circle at top left, rgba(255, 190, 104, 0.14), transparent 34%),
-      radial-gradient(circle at bottom right, rgba(29, 18, 42, 0.2), transparent 38%);
-    pointer-events: none;
+    inset: -20px;
+    background-image: var(--app-background-image);
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    filter: blur(4.5px) brightness(0.65);
+    transform: scale(1.08); /* slight scale to hide edges */
     z-index: 0;
+    pointer-events: none;
+    transition: background-image 1.2s ease-in-out;
   }
 
+  /* Remove sharp foreground to keep it immersive */
   .container::after {
-    content: "";
+    display: none;
+  }
+
+  /* Premium vignette overlay */
+  .overlay-vignette {
     position: absolute;
     inset: 0;
+    background: radial-gradient(circle at center, transparent 20%, rgba(0,0,0,0.5) 100%);
+    z-index: 2;
     pointer-events: none;
-    z-index: 0;
-    opacity: 0.14;
-    mix-blend-mode: soft-light;
-    background-image:
-      radial-gradient(rgba(255, 255, 255, 0.24) 0.6px, transparent 0.6px),
-      radial-gradient(rgba(0, 0, 0, 0.18) 0.6px, transparent 0.6px);
-    background-position: 0 0, 7px 7px;
-    background-size: 14px 14px;
   }
 
   .container > * {
     position: relative;
     z-index: 1;
   }
+
+
 
   .content {
     padding: 24px;

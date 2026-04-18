@@ -3,33 +3,35 @@
   import { onMount } from "svelte";
   import Background from "./Background.svelte";
   import Volume from "./Volume.svelte";
-  import AutoDJ from "./AutoDJ.svelte";
   import SongMode from "./SongMode.svelte";
-  import CustomTracks from "./CustomTracks.svelte";
 
   import { t, locale, setLocale } from "../../../locales/store";
 
   let isActive = false;
+
+  const onSettingsKeydown = (e: KeyboardEvent) => {
+    if (e.key.toLowerCase() === "j") {
+      toggle();
+    }
+  };
 
   function toggle() {
     isActive = !isActive;
     window.dispatchEvent(new CustomEvent("settings-open-changed", { detail: { isActive } }));
   }
 
-  // Shortuct to toggle settings with "J" key
-  window.addEventListener("keydown", (e) => {
-    if (e.key === "j") {
-      toggle();
-    }
-  });
-
   // when mounted toggle settings
   // to excute settings of children (old saved)
   onMount(() => {
+    window.addEventListener("keydown", onSettingsKeydown);
     toggle();
     setTimeout(() => {
       toggle();
     }, 10);
+
+    return () => {
+      window.removeEventListener("keydown", onSettingsKeydown);
+    };
   });
 
   const handleClickOutside = (event: MouseEvent) => {
@@ -71,9 +73,7 @@
       <div class="settings-content">
         <Background />
         <Volume />
-        <AutoDJ />
         <SongMode />
-        <CustomTracks />
         <div class="section language-section">
           <h4>{$t.settings.language.title}</h4>
           <div class="lang-switcher">
@@ -97,24 +97,39 @@
     color: white;
     border-radius: 50%;
     aspect-ratio: 4/4;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    transition: transform 0.18s ease, background-color 0.18s ease;
   }
+
+  button:hover {
+    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.16);
+  }
+
   #settings-box {
     position: relative;
+    z-index: 45;
   }
+
   .settings-container {
     position: absolute;
     right: 0;
-    top: 70px;
+    top: 62px;
     z-index: 100;
-    height: 58vh;
-    padding: 20px;
-    width: 340px; /* Like controls width */
+    max-height: min(72vh, 700px);
+    padding: 16px;
+    width: 360px;
     color: white;
-    border-radius: 20px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(10, 12, 16, 0.72);
     overflow-y: auto;
     animation: show 0.4s ease-in-out;
     display: flex;
     flex-direction: column;
+    box-shadow: 0 16px 42px rgba(0, 0, 0, 0.35);
   }
 
   .settings-header {
@@ -131,7 +146,17 @@
   .settings-content {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 16px;
+  }
+
+  .section {
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .section:last-child {
+    border-bottom: none;
+    padding-bottom: 2px;
   }
 
   .section h4 {
@@ -187,10 +212,9 @@
 
   @media only screen and (max-width: 600px) {
     .settings-container {
-      width: 80vw;
-      right: -3vw;
-      background-color: rgba(0, 0, 0, 50%);
-      height: 55vh;
+      width: min(88vw, 360px);
+      right: -4px;
+      max-height: 62vh;
     }
   }
 </style>
