@@ -1,7 +1,6 @@
 <script lang="ts">
   import { IconCloudRain } from "@tabler/icons-svelte";
   import { onMount, onDestroy } from "svelte";
-  import RainAnimation from "./RainAnimation.svelte";
 
   export let volume: number = 0.5;
 
@@ -130,8 +129,6 @@
   >
     <IconCloudRain size={25} color={isRaining ? "black" : "white"} />
   </button>
-
-  <RainAnimation {isRaining} />
 </div>
 
 <style>

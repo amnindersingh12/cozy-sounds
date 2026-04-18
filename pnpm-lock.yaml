@@ -15,11 +15,11 @@ importers:
         specifier: ^2.0.0
         version: 2.9.0
       '@tauri-apps/plugin-http':
-        specifier: ~2.3.0
-        version: 2.3.0
+        specifier: ~2.5.4
+        version: 2.5.8
       '@tauri-apps/plugin-shell':
-        specifier: ~2.3.0
-        version: 2.3.0
+        specifier: ~2.3.1
+        version: 2.3.5
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
@@ -236,6 +236,9 @@ packages:
   '@tabler/icons@2.47.0':
     resolution: {integrity: sha512-4w5evLh+7FUUiA1GucvGj2ReX2TvOjEr4ejXdwL/bsjoSkof6r1gQmzqI+VHrE2CpJpB3al7bCTulOkFa/RcyA==}
 
+  '@tauri-apps/api@2.10.1':
+    resolution: {integrity: sha512-hKL/jWf293UDSUN09rR69hrToyIXBb8CjGaWC7gfinvnQrBVvnLr08FeFi38gxtugAVyVcTa5/FD/Xnkb1siBw==}
+
   '@tauri-apps/api@2.9.0':
     resolution: {integrity: sha512-qD5tMjh7utwBk9/5PrTA/aGr3i5QaJ/Mlt7p8NilQ45WgbifUNPyKWsA63iQ8YfQq6R8ajMapU+/Q8nMcPRLNw==}
 
@@ -315,11 +318,11 @@ packages:
     engines: {node: '>= 10'}
     hasBin: true
 
-  '@tauri-apps/plugin-http@2.3.0':
-    resolution: {integrity: sha512-pigTvz+zzAqbIhCzRiR1GE98Jw7A03j2V+Eiexr9thBI8VfMiwFQMcbgON51xlwnVaI72LdbYKNajU84im8tlg==}
+  '@tauri-apps/plugin-http@2.5.8':
+    resolution: {integrity: sha512-oxd7oypzQeu8kAfFCrw534Kq7Cw+NzozcnCY21O4rz3A+veJiIiuSCMIprgGcZOcLAXFP9GmDhKUbhuKWcunRw==}
 
-  '@tauri-apps/plugin-shell@2.3.0':
-    resolution: {integrity: sha512-6GIRxO2z64uxPX4CCTuhQzefvCC0ew7HjdBhMALiGw74vFBDY95VWueAHOHgNOMV4UOUAFupyidN9YulTe5xlA==}
+  '@tauri-apps/plugin-shell@2.3.5':
+    resolution: {integrity: sha512-jewtULhiQ7lI7+owCKAjc8tYLJr92U16bPOeAa472LHJdgaibLP83NcfAF2e+wkEcA53FxKQAZ7byDzs2eeizg==}
 
   '@tsconfig/svelte@3.0.0':
     resolution: {integrity: sha512-pYrtLtOwku/7r1i9AMONsJMVYAtk3hzOfiGNekhtq5tYBGA7unMve8RvUclKLMT3PrihvJqUmzsRGh0RP84hKg==}
@@ -804,6 +807,8 @@ snapshots:
 
   '@tabler/icons@2.47.0': {}
 
+  '@tauri-apps/api@2.10.1': {}
+
   '@tauri-apps/api@2.9.0': {}
 
   '@tauri-apps/cli-darwin-arm64@2.9.1':
@@ -853,13 +858,13 @@ snapshots:
       '@tauri-apps/cli-win32-ia32-msvc': 2.9.1
       '@tauri-apps/cli-win32-x64-msvc': 2.9.1
 
-  '@tauri-apps/plugin-http@2.3.0':
+  '@tauri-apps/plugin-http@2.5.8':
     dependencies:
-      '@tauri-apps/api': 2.9.0
+      '@tauri-apps/api': 2.10.1
 
-  '@tauri-apps/plugin-shell@2.3.0':
+  '@tauri-apps/plugin-shell@2.3.5':
     dependencies:
-      '@tauri-apps/api': 2.9.0
+      '@tauri-apps/api': 2.10.1
 
   '@tsconfig/svelte@3.0.0': {}
 

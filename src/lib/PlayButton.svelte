@@ -5,9 +5,10 @@
       IconPlayerPlayFilled,
   } from "@tabler/icons-svelte";
   import { onDestroy, onMount } from "svelte";
+  import { scale as scaleTransition, fade } from "svelte/transition";
+  import { cubicOut } from "svelte/easing";
 // @ts-ignore
   import * as Tone from "tone";
-  import Chords from "../lib/engine/Chords/Chords";
   import ChordProgression from "../lib/engine/Chords/ChordProgression";
   import intervalWeights from "../lib/engine/Chords/IntervalWeights";
   import Keys from "../lib/engine/Chords/Keys";
@@ -18,11 +19,11 @@
   import Snare from "../lib/engine/Drums/Snare";
   import Piano from "../lib/engine/Piano/Piano";
 
-  const STORAGE_KEY = "Volumes";
+  const STORAGE_KEY = "volumes"; // matches Controls/index.svelte
   const SONG_MODE_STORAGE_KEY = "SongModeConfig";
   const AUTO_START_KEY = "AutoStartSong";
   const DEFFAULT_VOLUMES = {
-    rain: 0.35,
+    rain: 1,
     thunder: 1,
     campfire: 1,
     jungle: 1,
@@ -85,13 +86,6 @@
     key: string;
     mood: SongMood;
     density: number;
-    bpmOverride?: number | null;
-    progression?: number[];
-    melodies?: number[][];
-    mlTitle?: string;
-    mlSource?: "predict" | "decode" | "";
-    mlServerUrl?: string;
-    mlInput?: string;
   };
 
   const defaultSongMode: SongModeConfig = {
@@ -100,13 +94,6 @@
     key: "AUTO",
     mood: "balanced",
     density: 0.33,
-    bpmOverride: null,
-    progression: [],
-    melodies: [],
-    mlTitle: "",
-    mlSource: "",
-    mlServerUrl: "",
-    mlInput: "",
   };
 
   let songMode: SongModeConfig = loadSongModeConfig();
@@ -125,6 +112,10 @@
   let isWavExporting = false;
   let wavExportMinutes = 3;
   let isUiHidden = localStorage.getItem("UIControlsHidden") === "true";
+  let countdownProgress = 0;        
+  let countdownStart = Date.now();  
+  let countdownFrame: number;       
+  let transitionFlash = false;      
 
   // Initialize instruments
   const pn = new Piano(() => (pianoLoaded = true)).sampler;
@@ -132,6 +123,34 @@
   const snare = new Snare(() => (snareLoaded = true)).sampler;
   const hat = new Hat(() => (hatLoaded = true)).sampler;
   const noise = Noise;
+
+  // Drum pattern banks
+  const KICK_PATTERNS = [
+    ["C4", "", "", "", "", "", "", "C4", "C4", "", ".", "", "", "", "", ""],  // classic two-step
+    ["C4", "", "", "", "C4", "", "", "", "C4", "", "", "", "C4", "", "", ""],  // four-on-the-floor
+    ["C4", "", "C4", "", "", "", "C4", "", "", "C4", "", "", "C4", "", "", ""],  // syncopated
+    ["C4", "", "", "", "", "", "C4", "", "", "", "C4", "", "", "C4", "", ""],  // half-time feel
+    ["C4", ".", "", "", "C4", "", "C4", "", "", "", "C4", "", "", "", "C4", ""],  // busy
+    ["C4", "", "", "", "", "", "", "", "C4", "", "", "", "", "", "", ""],  // sparse
+  ];
+  const SNARE_PATTERNS = [
+    ["", "C4"],                          // classic backbeat (2n)
+    ["", "C4", "", "C4"],                // every-beat (4n)
+    ["", "C4", "C4", ""],               // shifted
+    ["", "", "C4", ""],                  // delayed
+    ["C4", "", "", "C4"],               // reverse
+  ];
+  let currentKickPattern = 0;
+  let currentSnarePattern = 0;
+
+  function rotatePatterns() {
+    const nextKick = (currentKickPattern + 1 + Math.floor(Math.random() * (KICK_PATTERNS.length - 1))) % KICK_PATTERNS.length;
+    const nextSnare = (currentSnarePattern + 1 + Math.floor(Math.random() * (SNARE_PATTERNS.length - 1))) % SNARE_PATTERNS.length;
+    currentKickPattern = nextKick;
+    currentSnarePattern = nextSnare;
+    if (kickLoop) kickLoop.events = KICK_PATTERNS[nextKick];
+    if (snareLoop) snareLoop.events = SNARE_PATTERNS[nextSnare];
+  }
 
   // Sequences
   let chords, melody, kickLoop, snareLoop, hatLoop;
@@ -150,15 +169,6 @@
         key: parsed.key || "AUTO",
         mood: parsed.mood || "balanced",
         density: clamp(Number(parsed.density ?? 0.33), 0.1, 0.95),
-        bpmOverride: Number.isFinite(parsed.bpmOverride) ? Number(parsed.bpmOverride) : null,
-        progression: Array.isArray(parsed.progression)
-          ? parsed.progression.map((value) => Number(value)).filter((value) => Number.isInteger(value))
-          : [],
-        melodies: Array.isArray(parsed.melodies) ? parsed.melodies : [],
-        mlTitle: parsed.mlTitle || "",
-        mlSource: parsed.mlSource === "decode" ? "decode" : parsed.mlSource === "predict" ? "predict" : "",
-        mlServerUrl: parsed.mlServerUrl || "",
-        mlInput: parsed.mlInput || "",
       };
     } catch {
       return { ...defaultSongMode };
@@ -167,22 +177,6 @@
 
   function clamp(value: number, min: number, max: number) {
     return Math.max(min, Math.min(max, value));
-  }
-
-  function normalizeOptionalNumber(value: unknown) {
-    return typeof value === "number" && Number.isFinite(value) ? value : null;
-  }
-
-  function normalizeMelodies(input?: number[][]) {
-    return (Array.isArray(input) ? input : [])
-      .map((row) =>
-        (Array.isArray(row) ? row : [])
-          .map((value) => Number(value))
-          .filter((value) => Number.isInteger(value) && value >= 0 && value <= 15)
-          .slice(0, 8),
-      )
-      .filter((row) => row.length > 0)
-      .slice(0, 16);
   }
 
   function hashSeed(value: string): number {
@@ -241,25 +235,15 @@
   }
 
   function applySongModeConfig(incoming: Partial<SongModeConfig>) {
-    const incomingProgression = Array.isArray(incoming.progression)
-      ? incoming.progression.map((value) => Number(value)).filter((value) => Number.isInteger(value) && value >= 1 && value <= 7)
-      : songMode.progression || [];
-    const incomingMelodies = normalizeMelodies(incoming.melodies ?? songMode.melodies);
-    const incomingBpmOverride = normalizeOptionalNumber(incoming.bpmOverride ?? songMode.bpmOverride);
-
     songMode = {
       ...songMode,
       ...incoming,
       seed: (incoming.seed ?? songMode.seed ?? "lofi-seed").trim() || "lofi-seed",
       density: clamp(Number(incoming.density ?? songMode.density), 0.1, 0.95),
-      bpmOverride: incomingBpmOverride,
-      progression: incomingProgression,
-      melodies: incomingMelodies,
     };
 
     const moodProfile = getMoodProfile(songMode.mood);
-    const targetBpm = songMode.enabled ? (songMode.bpmOverride ?? moodProfile.bpm) : 156;
-    Tone.Transport.bpm.rampTo(targetBpm, 0.2);
+    Tone.Transport.bpm.rampTo(songMode.enabled ? moodProfile.bpm : 156, 0.2);
     Tone.Transport.swing = songMode.enabled ? moodProfile.swing : 1;
 
     if (songMode.enabled) {
@@ -293,60 +277,7 @@
     URL.revokeObjectURL(url);
   }
 
-  function writeString(view: DataView, offset: number, value: string) {
-    for (let i = 0; i < value.length; i++) {
-      view.setUint8(offset + i, value.charCodeAt(i));
-    }
-  }
-
-  function audioBufferToWavBuffer(audioBuffer: AudioBuffer) {
-    const numChannels = audioBuffer.numberOfChannels;
-    const sampleRate = audioBuffer.sampleRate;
-    const bytesPerSample = 2;
-    const dataLength = audioBuffer.length * numChannels * bytesPerSample;
-    const buffer = new ArrayBuffer(44 + dataLength);
-    const view = new DataView(buffer);
-
-    const channelData = Array.from({ length: numChannels }, (_, index) =>
-      audioBuffer.getChannelData(index),
-    );
-
-    writeString(view, 0, "RIFF");
-    view.setUint32(4, 36 + dataLength, true);
-    writeString(view, 8, "WAVE");
-    writeString(view, 12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
-    view.setUint16(32, numChannels * bytesPerSample, true);
-    view.setUint16(34, 16, true);
-    writeString(view, 36, "data");
-    view.setUint32(40, dataLength, true);
-
-    let offset = 44;
-    for (let sampleIndex = 0; sampleIndex < audioBuffer.length; sampleIndex++) {
-      for (let channelIndex = 0; channelIndex < numChannels; channelIndex++) {
-        const channelSample = Math.max(-1, Math.min(1, channelData[channelIndex][sampleIndex]));
-        view.setInt16(
-          offset,
-          channelSample < 0 ? channelSample * 0x8000 : channelSample * 0x7fff,
-          true,
-        );
-        offset += 2;
-      }
-    }
-
-    return buffer;
-  }
-
-  async function convertAudioBlobToWav(blob: Blob) {
-    const arrayBuffer = await blob.arrayBuffer();
-    const decodedBuffer = await Tone.context.rawContext.decodeAudioData(arrayBuffer.slice(0));
-    const wavBuffer = audioBufferToWavBuffer(decodedBuffer);
-    return new Blob([wavBuffer], { type: "audio/wav" });
-  }
+  // Removed dead code: writeString, audioBufferToWavBuffer, convertAudioBlobToWav (not referenced)
 
   function startRecording(onStop: (blob: Blob) => void | Promise<void>, mimeType = "audio/webm;codecs=opus") {
     if (!canRecord || !recordDestination || isRecording) {
@@ -615,7 +546,7 @@
           }
         }
       },
-      ["C4", "", "", "", "", "", "", "C4", "C4", "", ".", "", "", "", "", ""],
+      KICK_PATTERNS[currentKickPattern],
       "8n",
     );
 
@@ -628,7 +559,7 @@
           }
         }
       },
-      ["", "C4"],
+      SNARE_PATTERNS[currentSnarePattern],
       "2n",
     );
 
@@ -652,11 +583,16 @@
     snareLoop.humanize = true;
     hatLoop.humanize = true;
 
-    // Listen for spacebar press
+    // Listen for spacebar + T key
     const handleKeydown = (e) => {
       if (e.code === "Space") {
         e.preventDefault();
         toggle();
+      } else if (e.key.toLowerCase() === "t" && isPlaying && !isExporting) {
+        // #6 — manual transition
+        e.preventDefault();
+        autoDJTransition();
+        showTransitionFlash();
       }
     };
 
@@ -701,6 +637,14 @@
     // Initialize mode
     autoDJMode = localStorage.getItem("AutoDJMode") || "MUSIC";
 
+    // Auto-change the lofi every 60 seconds — skip if SongMode loop is active (it has its own timer)
+    autoChangeTimer = setInterval(() => {
+      const songModeCfg = (() => { try { return JSON.parse(localStorage.getItem("SongModeConfig") || "{}"); } catch { return {}; } })();
+      if (isPlaying && autoDJMode !== "MANUAL" && !songModeCfg.loopEnabled) {
+        autoDJTransition();
+      }
+    }, 60000);
+
     return () => {
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("lofi-toggle-play", handleCustomToggle);
@@ -712,6 +656,8 @@
   });
 
   onDestroy(() => {
+    cancelAnimationFrame(countdownFrame);
+    if (autoChangeTimer !== null) clearInterval(autoChangeTimer);
     if (exportStopTimer !== null) {
       clearTimeout(exportStopTimer);
     }
@@ -729,36 +675,9 @@
   });
 
   let barCount = 0;
-  let sectionBarLength = 32; // change section every 32 bars
+  let sectionBarLength = 64; // keep bar-based transitions infrequent; clock timer handles the 1-min change
   let isTransitioning = false;
-  let melodyStep = 0;
-
-  function buildProgressionFromDegrees(degrees: number[]) {
-    return degrees
-      .map((degree) => Chords[degree - 1])
-      .filter((chord) => !!chord);
-  }
-
-  function buildMelodyNotes(stepIndex: number) {
-    const melodyRows = normalizeMelodies(songMode.melodies || []);
-    if (!melodyRows.length || !scale.length) {
-      return null;
-    }
-
-    const chordIndex = Math.min(Math.floor(stepIndex / 8), melodyRows.length - 1);
-    const chordMelody = melodyRows[chordIndex] || [];
-    if (!chordMelody.length) {
-      return null;
-    }
-
-    const noteIndex = stepIndex % chordMelody.length;
-    const noteDegree = chordMelody[noteIndex];
-    if (!Number.isInteger(noteDegree) || noteDegree < 0 || noteDegree >= scale.length) {
-      return null;
-    }
-
-    return scale[noteDegree];
-  }
+  let autoChangeTimer: ReturnType<typeof setInterval> | null = null;
 
   function nextChord() {
     const nextProgress = progress === progression.length - 1 ? 0 : progress + 1;
@@ -796,12 +715,21 @@
     }
   }
 
+  function showTransitionFlash() {
+    transitionFlash = true;
+    setTimeout(() => { transitionFlash = false; }, 1600);
+  }
+
+  function tickCountdown() {
+    countdownProgress = Math.min(1, (Date.now() - countdownStart) / 60000);
+    countdownFrame = requestAnimationFrame(tickCountdown);
+  }
+
   function autoDJTransition() {
     if(isTransitioning) return; // Prevent overlaps
     if(autoDJMode === "MANUAL") return;
 
     isTransitioning = true;
-    const currentGain = linearToDb(volumes.main_track);
 
     // Change keys/chords
     generateProgression()
@@ -828,23 +756,30 @@
       }
     }
 
-    // Smart Tracks: Rotate the active music source so it does not stay stuck.
-    if (autoDJMode === "MUSIC" || autoDJMode === "ATMOSPHERE") {
-      window.dispatchEvent(new CustomEvent("lofi-cycle-track"));
-    } else if (autoDJMode === "WORLD") {
-      window.dispatchEvent(new CustomEvent("lofi-random-track"));
+    // Smart Tracks: Toggle tracks randomly
+    // Applied ONLY in WORLD
+    if (autoDJMode === "WORLD") {
+      // 20% chance to toggle a track
+      if (random() < 0.2) {
+        window.dispatchEvent(new CustomEvent("lofi-random-track"));
+      }
     }
 
-    // Crossfade FX (Always apply for smoother transitions if not OFF)
-    vol.volume.rampTo(currentGain - 4, 1.2);
-    lpf.frequency.linearRampTo(300, 3) // longer muffle for smoother blend
+    // Rotate drum patterns
+    rotatePatterns();
+
+    // Crossfade FX
+    lpf.frequency.linearRampTo(300, 2);
     setTimeout(() => {
-      lpf.frequency.linearRampTo(1200, 3) // longer open-up for smoother blend
-      vol.volume.rampTo(currentGain, 1.4);
+      lpf.frequency.linearRampTo(1200, 2);
       setTimeout(() => {
         isTransitioning = false;
-      }, 3000);
-    }, 3000);
+      }, 2000);
+    }, 2000);
+
+    // #7 — notify App to rotate background; #1 — reset countdown ring
+    countdownStart = Date.now();
+    window.dispatchEvent(new CustomEvent("lofi-transition-fired"));
   }
 
   function playChord() {
@@ -862,15 +797,6 @@
 
   function playMelody() {
     if (melodyOff || !(random() < melodyDensity)) {
-      return;
-    }
-
-    const modelMelody = songMode.enabled ? buildMelodyNotes(melodyStep) : null;
-    melodyStep = (melodyStep + 1) % 64;
-
-    if (modelMelody) {
-      // @ts-ignore
-      pn.triggerAttackRelease(modelMelody, "8n");
       return;
     }
 
@@ -933,8 +859,7 @@
     const newScale = Tone.Frequency(newKey + "5")
       .harmonize(_scale)
       .map((f) => Tone.Frequency(f).toNote());
-    const mlProgression = buildProgressionFromDegrees(songMode.progression || []);
-    const newProgression = mlProgression.length >= 2 ? mlProgression : ChordProgression.generate(8, random);
+    const newProgression = ChordProgression.generate(8, random);
     const newScalePos = Math.floor(random() * _scale.length);
 
     key = newKey;
@@ -943,7 +868,6 @@
     scale = newScale;
     genChordsOnce = true;
     scalePos = newScalePos;
-    melodyStep = 0;
   }
 
   function toggle() {
@@ -985,6 +909,7 @@
   $: if (allSamplesLoaded && !contextStarted) {
     startAudioContext();
     generateProgression();
+    countdownFrame = requestAnimationFrame(tickCountdown);
   }
 
   // Automatically start song generation/playback once everything is prepared.
@@ -1019,55 +944,54 @@
 </script>
 
 <div>
+  <!-- #3 Now-playing chip -->
+  {#if genChordsOnce && !isExporting && isPlaying}
+    <div class="now-playing-chip">
+      <span class="chip-key">{key}</span>
+      <span class="chip-sep">·</span>
+      <span class="chip-bpm">{Math.round(Tone.Transport.bpm.value)} BPM</span>
+    </div>
+  {/if}
+
+  <!-- #1 countdown ring -->
+  {#if genChordsOnce && isPlaying && !isExporting}
+    <svg class="countdown-ring" viewBox="0 0 90 90" aria-hidden="true">
+      <circle cx="45" cy="45" r="40" class="ring-track" />
+      <circle cx="45" cy="45" r="40" class="ring-progress"
+        style="stroke-dashoffset: {251.3 - 251.3 * countdownProgress}"
+      />
+    </svg>
+  {/if}
+
   <div class:exporting={isExporting} class="controls">
     <button
       class="play-button"
+      class:pulsing={isPlaying}
       on:click={handleButtonAction}
       disabled={!allSamplesLoaded}
     >
       {#if !allSamplesLoaded}
-        <IconLoader size={30} class="spinning" />
+          <IconLoader size={34} class="spinning" />
       {:else if !contextStarted}
-        <span class="context-text">Initialize Audio</span>
-      {:else if !genChordsOnce}
-        <IconPlayerPlayFilled size={30} class="disabled" />
-      {:else if isPlaying}
-        <IconPlayerPauseFilled size={30} />
+        <span in:fade={{ duration: 200 }} class="context-text">Initialize Audio</span>
       {:else}
-        <IconPlayerPlayFilled size={30} />
+        {#key isPlaying}
+          <span
+            class="icon-container"
+            in:scaleTransition={{ duration: 400, delay: 50, easing: cubicOut }}
+            out:scaleTransition={{ duration: 200, easing: cubicOut }}
+          >
+            {#if !genChordsOnce}
+              <IconPlayerPlayFilled size={34} class="disabled" />
+            {:else if isPlaying}
+              <IconPlayerPauseFilled size={34} />
+            {:else}
+              <IconPlayerPlayFilled size={34} />
+            {/if}
+          </span>
+        {/key}
       {/if}
     </button>
-    {#if !isUiHidden}
-      <button
-        class="recordBtn glass"
-        on:click={startAutoAudioExport}
-        disabled={!canRecord || isExporting || isRecording || isAudioExporting || isWavExporting}
-      >
-        {#if isAudioExporting}
-          Audio {audioExportMinutes}m...
-        {:else}
-          Audio {audioExportMinutes}m
-        {/if}
-      </button>
-      <button
-        class="recordBtn glass"
-        on:click={startSceneExport}
-        disabled={!canRecord || isExporting || isAudioExporting || isRecording}
-      >
-        Export 2m
-      </button>
-      <button
-        class="recordBtn glass"
-        on:click={startQuickWavExport}
-        disabled={!canRecord || isExporting || isRecording || isAudioExporting || isWavExporting}
-      >
-        {#if isWavExporting}
-          WAV {wavExportMinutes}m...
-        {:else}
-          WAV {wavExportMinutes}m
-        {/if}
-      </button>
-    {/if}
   </div>
 
   {#if allSamplesLoaded && contextStarted}
@@ -1082,10 +1006,28 @@
       </ol>
     {/if}
   {/if}
-  <!-- Visualizer intentionally hidden to prevent overlay conflicts and keep layout clean. -->
+
+  <!-- #2 FFT Visualizer -->
+  {#if genChordsOnce && contextStarted && !isExporting}
+    <div class="visualizer-container">
+      <Visualizer />
+    </div>
+  {/if}
+
+  <!-- #6 Transition flash badge -->
+  {#if transitionFlash}
+    <div class="transition-flash" aria-live="assertive">↻ New vibe</div>
+  {/if}
+
+  <!-- T-key hint (top-left, only while playing) -->
+  {#if isPlaying && !isExporting}
+    <div class="t-key-hint">T  transition</div>
+  {/if}
+
 </div>
 
 <style>
+  /* ── Controls wrapper ── */
   .controls {
     position: fixed;
     bottom: 70px;
@@ -1098,105 +1040,162 @@
     gap: 5px;
     z-index: 40;
   }
+  .controls.exporting { opacity: 0; pointer-events: none; }
 
-  .controls.exporting {
-    opacity: 0;
-    pointer-events: none;
-  }
-
+  /* ── Play button ── */
+  .play-button :global(svg) { color: black !important; stroke: black !important; fill: black !important; }
   .play-button {
-    width: 70px;
-    height: 70px;
-    border-radius: 50%;
-    background-color: white;
-    color: black;
+    width: 70px; height: 70px; border-radius: 50%;
+    background-color: white; color: black;
+    display: flex; justify-content: center; align-items: center;
+    z-index: 10; border: none; cursor: pointer;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+    transition: box-shadow 0.2s;
+    position: relative; /* relative for absolute children icons */
+  }
+  .icon-container {
+    position: absolute;
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 10;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    inset: 0;
+  }
+  .play-button.pulsing {
+    animation: buttonPulse 2s infinite ease-in-out;
+    box-shadow: 0 0 25px 8px rgba(245,166,35,0.22);
+  }
+  @keyframes buttonPulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.05); }
+    100% { transform: scale(1); }
   }
 
-  .play-button:hover {
-    box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.5);
-  }
-
-  .recordBtn {
-    color: white;
-    border: none;
-    border-radius: 999px;
-    min-width: 98px;
-    height: 34px;
-    padding: 0 10px;
-    margin-top: 2px;
-    font-size: 12px;
-    outline: none;
-  }
-
-  .recordBtn:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-  }
-
-  .progressionList {
+  /* ── Countdown ring ── */
+  .countdown-ring {
     position: fixed;
-    bottom: 6px;
+    bottom: 53px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px; height: 90px;
+    pointer-events: none;
+    z-index: 39;
+    filter: drop-shadow(0 0 8px rgba(245,166,35,0.4));
+  }
+  .ring-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.08);
+    stroke-width: 3.5;
+  }
+  .ring-progress {
+    fill: none;
+    stroke: #f5a623;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-dasharray: 251.3;
+    stroke-dashoffset: 251.3;
+    transform: rotate(-90deg);
+    transform-origin: 45px 45px;
+    transition: stroke-dashoffset 0.8s linear;
+  }
+
+  /* ── #2 Visualizer container ── */
+  .visualizer-container {
+    position: fixed;
+    left: 50%; bottom: 220px;
+    transform: translateX(-50%);
+    width: min(420px, 74vw); height: 56px;
+    overflow: hidden; z-index: 15;
+    pointer-events: none;
+  }
+  :global(.exporting) .visualizer-container { opacity: 0.5; }
+
+  /* ── Now-playing chip ── */
+  .now-playing-chip {
+    position: fixed;
+    bottom: 152px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 10px;
-    list-style: none;
-    padding: 0;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 20px;
-    z-index: 12;
+    align-items: center;
+    gap: 8px;
+    background: rgba(10,10,14,0.62);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(245,166,35,0.25);
+    border-radius: 999px;
+    padding: 5px 14px;
+    z-index: 41;
+    animation: chipIn 0.3s ease;
+  }
+  .chip-key, .chip-bpm {
+    font-size: 11px;
+    font-weight: 600;
+    color: #f5a623;
+    letter-spacing: 0.04em;
+  }
+  .chip-sep { color: rgba(255,255,255,0.3); font-size: 11px; }
+  @keyframes chipIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
-  .progressionList li {
-    padding: 5px 10px;
-    border-radius: 4px;
-    color: white;
-    border: 2px solid transparent;
-  }
-
-  .progressionList li.live {
-    border-color:#ffffff66;
-  }
-
-  .visualizer-container {
+  /* ── Transition flash badge ── */
+  .transition-flash {
     position: fixed;
+    bottom: 160px;
     left: 50%;
-    bottom: 230px;
     transform: translateX(-50%);
-    width: min(420px, 74vw);
-    height: 86px;
-    overflow: hidden;
-    margin-top: 0;
-    z-index: 15;
+    background: rgba(245,166,35,0.18);
+    border: 1px solid rgba(245,166,35,0.5);
+    color: #f5a623;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 16px;
+    border-radius: 999px;
+    z-index: 50;
+    animation: flashIn 0.2s ease, flashOut 0.4s ease 1.2s forwards;
     pointer-events: none;
   }
+  @keyframes flashIn  { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes flashOut { from { opacity: 1; } to { opacity: 0; } }
 
-  :global(.exporting) .visualizer-container {
-    opacity: 0.5;
+  /* ── T-key hint badge ── */
+  .t-key-hint {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.45);
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    z-index: 50;
+    pointer-events: none;
+    letter-spacing: 0.05em;
   }
+
+  /* ── Progression list ── */
+  .progressionList {
+    position: fixed;
+    bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 20px;
+    list-style: none; padding: 0;
+    justify-content: center; flex-wrap: wrap;
+    z-index: 12;
+  }
+  .progressionList li {
+    padding: 5px 10px; border-radius: 4px;
+    color: white; border: 2px solid transparent;
+  }
+  .progressionList li.live { border-color: #ffffff66; }
 
   @media only screen and (max-width: 600px) {
-    .play-button {
-      margin-bottom: 40px;
-    }
-    .progressionList {
-      bottom: 0;
-      left: 0;
-      width: 100vw;
-      transform: scale(0.8);
-      z-index: 11;
-    }
-    .visualizer-container {
-      bottom: 114px;
-      display: none;
-    }
+    .progressionList { bottom: 0; left: 0; width: 100vw; transform: scale(0.8); z-index: 11; }
+    .visualizer-container { bottom: 114px; display: none; }
+    .t-key-hint { display: none; }
+    .now-playing-chip { bottom: 136px; }
   }
 </style>
+

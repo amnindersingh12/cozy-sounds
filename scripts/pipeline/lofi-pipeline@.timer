@@ -1,0 +1,11 @@
+[Unit]
+Description=Lofi Engine Pipeline Timer (every 3 hours)
+Requires=lofi-pipeline@%i.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=3h
+Unit=lofi-pipeline@%i.service
+
+[Install]
+WantedBy=timers.target

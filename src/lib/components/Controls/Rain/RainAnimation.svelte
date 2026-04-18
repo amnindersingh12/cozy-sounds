@@ -148,7 +148,7 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 999;
+    z-index: 14;
   }
 
   /* 🌫️ Fog layer */
@@ -157,7 +157,7 @@
     position: fixed;
     inset: 0;
     pointer-events: none;
-    z-index: 998;
+    z-index: 13;
 
     background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05), transparent 70%);
     opacity: 0;

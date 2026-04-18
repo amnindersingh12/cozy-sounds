@@ -1,6 +1,6 @@
 <script lang="ts">
   import { IconArrowsShuffle } from "@tabler/icons-svelte";
-  import TrackListItem from "./TrackListItem.svelte";
+  // TrackList component removed
   import { onMount } from "svelte";
   import * as Tone from "tone";
   import localDB from "../../localDB";
@@ -112,7 +112,6 @@
   let activeAudios = [];
   let isMobileHidden = false; // Used to hide track list on mobile due to tight space
   let trackVolumes = {};
-  let isUiHidden = localStorage.getItem("UIControlsHidden") === "true";
 
   const customTrackFilter = new Tone.Filter(2200, "lowpass");
   const customTrackReverb = new Tone.Reverb({
@@ -160,6 +159,7 @@
   function getTrackById(id: number) {
     return tracks.find((track) => track.id === id);
   }
+
 
   function emitFxSettings() {
     customTrackFx = {
@@ -563,10 +563,6 @@
       reverseChance = customTrackFx.reverseChance;
       applyCustomTrackFx();
     };
-    const handleUiVisibility = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      isUiHidden = !!customEvent.detail?.hidden;
-    };
     const handleSelectedTrackVolume = (event: Event) => {
       const customEvent = event as CustomEvent;
       const value = Number(customEvent.detail?.volume);
@@ -583,8 +579,8 @@
     window.addEventListener("settings-open-changed", handleSettingsOpen);
     window.addEventListener("lofi-add-custom-track", handleAddCustomTrack);
     window.addEventListener("lofi-custom-track-fx-changed", handleCustomTrackFxChange);
-    window.addEventListener("lofi-ui-visibility-changed", handleUiVisibility);
     window.addEventListener("lofi-selected-track-volume", handleSelectedTrackVolume);
+
     return () => {
       window.removeEventListener("keydown", handleKeydown);
       window.removeEventListener("lofi-toggle-track", handleToggleTrack);
@@ -593,7 +589,6 @@
       window.removeEventListener("lofi-random-track", handleRandomTrack);
       window.removeEventListener("lofi-add-custom-track", handleAddCustomTrack);
       window.removeEventListener("lofi-custom-track-fx-changed", handleCustomTrackFxChange);
-      window.removeEventListener("lofi-ui-visibility-changed", handleUiVisibility);
       window.removeEventListener("lofi-selected-track-volume", handleSelectedTrackVolume);
     };
   });
@@ -603,99 +598,42 @@
   class={"track-list" + (isMobileHidden ? " mobile-hidden" : "")}
   on:wheel={handleScroll}
 >
-  <div class="now-playing glass">
-    <div class="now-playing-copy">
-      <span class="now-playing-label">Now Playing</span>
-      <span class="now-playing-title">{activeTrack?.title || activeTrack?.customName || `Track ${activeTrack?.id || visibleTrackId}`}</span>
-    </div>
-    <button
-      class="now-playing-shuffle"
-      type="button"
-      title="Shuffle current playing track"
-      aria-label="Shuffle current playing track"
-      on:click={shuffleCurrentTrack}
-      disabled={!tracks.length}
-    >
-      <IconArrowsShuffle size={14} />
-    </button>
-  </div>
-
-  {#if !isUiHidden}
-    <div class="tracklist-fx glass">
-      <div class="fx-row">
-        <label for="tracklist-lofi">LoFi Amount {Math.round(lofiAmount * 100)}%</label>
-        <input id="tracklist-lofi" type="range" min="0" max="1" step="0.01" bind:value={lofiAmount} on:input={emitFxSettings} />
-      </div>
-      <div class="fx-row">
-        <label for="tracklist-slow">Slowdown {slowdown.toFixed(2)}x</label>
-        <input id="tracklist-slow" type="range" min="0.75" max="1" step="0.01" bind:value={slowdown} on:input={emitFxSettings} />
-      </div>
-      <div class="fx-row">
-        <label for="tracklist-rev">Reverse {Math.round(reverseChance * 100)}%</label>
-        <input id="tracklist-rev" type="range" min="0" max="0.3" step="0.01" bind:value={reverseChance} on:input={emitFxSettings} />
-      </div>
-    </div>
-  {/if}
-
-  <div class="wrapper">
-    <div class="carousel">
-      {#each tracks as track}
-        <TrackListItem
-          {track}
-          totalTracks={tracks.length}
-          {visibleTrackId}
-          currentVolume={getTrackVolume(track.id)}
-          onToggleTrack={toggleTrack}
-          onSetTrackVolume={setTrackVolume}
-          setMeVisible={(id) => (visibleTrackId = id)}
-        />
-      {/each}
-    </div>
-  </div>
+ 
 </div>
 
 <style>
   .track-list {
-    width: min(450px, 90vw);
-    height: min(52vh, 460px);
-    max-height: calc(100vh - 230px);
-    padding: 10px 8px;
-    border-radius: 20px;
-    z-index: 18;
+    width: min(460px, 90vw);
+    height: min(58vh, 520px);
+    max-height: calc(100vh - 190px);
+    padding: 12px 10px;
+    border-radius: 24px;
+    z-index: 16;
     position: fixed;
-    left: 50%;
-    top: 80px;
-    transform: translateX(-50%);
+    left: 20px;
+    top: 126px;
+    transform: none;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
 
-  .now-playing {
-    width: fit-content;
-    margin-bottom: 6px;
-    border-radius: 999px;
-    padding: 6px 8px 6px 10px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    color: white;
-  }
+ 
 
   .now-playing-copy {
     display: grid;
-    gap: 2px;
+    gap: 4px;
   }
 
   .now-playing-label {
     opacity: 0.75;
-    font-size: 10px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
 
   .now-playing-title {
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
   }
 
@@ -740,59 +678,25 @@
     flex-direction: column;
   }
 
-  .tracklist-fx {
-    width: 96%;
-    margin-bottom: 8px;
-    border-radius: 12px;
-    padding: 8px;
-    display: grid;
-    gap: 6px;
-  }
-
-  .fx-row {
-    display: grid;
-    gap: 4px;
-  }
-
-  .fx-row label {
-    font-size: 11px;
-    opacity: 0.85;
-  }
-
-  .fx-row input {
-    width: 100%;
-  }
-
   @media only screen and (max-width: 600px) {
     .track-list {
       width: 96vw;
-      top: 64px;
-      height: calc(100vh - 290px);
-      min-height: 250px;
+      left: 2vw;
+      top: 84px;
+      height: calc(100vh - 240px);
+      min-height: 260px;
       max-height: none;
       padding: 8px 6px;
       border-radius: 14px;
     }
 
-    .now-playing {
-      padding: 5px 7px 5px 8px;
-      margin-bottom: 4px;
-    }
+    
 
     .now-playing-shuffle {
       width: 22px;
       height: 22px;
     }
 
-    .tracklist-fx {
-      padding: 6px;
-      gap: 4px;
-      margin-bottom: 6px;
-    }
-
-    .fx-row label {
-      font-size: 10px;
-    }
     .mobile-hidden {
       display: none;
     }

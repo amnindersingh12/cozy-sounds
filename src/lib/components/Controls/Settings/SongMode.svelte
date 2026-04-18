@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import Keys from "../../../engine/Chords/Keys";
   import { fetchMlTrack } from "../../../ml/lofiApi";
 
@@ -58,6 +58,7 @@
     "Exam prep ambient lo-fi, sparse melody, soothing chords, stable groove for long sessions.",
     "Coding study soundtrack, warm tape texture, smooth bass, restrained percussion.",
   ];
+  const presetOrder = ["study", "rainy", "night_drive", "warm_piano", "dusty_boom_bap"] as const;
   const LATENT_DIM = 100;
   const sampleLatent = Array.from({ length: LATENT_DIM }, (_, i) =>
     Number((Math.sin(i * 1.37) * 0.35).toFixed(5)),
@@ -77,6 +78,14 @@
   let mlInput = "late-night study session in a cozy apartment";
   let isApplyingMl = false;
   let mlError = "";
+  let selectedPreset = "study";
+  let loopEnabled = false;
+  let loopMinutes = 4;
+  let autoCycleStyles = true;
+  let styleShiftEvery = 3;
+  let loopCycles = 0;
+  let loopTimer: number | null = null;
+  let loopInFlight = false;
 
   function emitConfig(regenerate = false) {
     const config = {
@@ -92,6 +101,11 @@
       mlSource,
       mlServerUrl,
       mlInput,
+      selectedPreset,
+      loopEnabled,
+      loopMinutes,
+      autoCycleStyles,
+      styleShiftEvery,
       regenerate,
     };
 
@@ -152,6 +166,103 @@
       .slice(0, 16);
   }
 
+  function normalizePresetId(value: unknown) {
+    const candidate = String(value || "study");
+    return presetOrder.includes(candidate as (typeof presetOrder)[number])
+      ? candidate
+      : "study";
+  }
+
+  function getPresetProfile(presetId: string) {
+    const profiles = {
+      study: {
+        source: "predict" as const,
+        mood: "chill" as SongMood,
+        density: 0.25,
+        prompt: studyPrompts[0],
+      },
+      rainy: {
+        source: "predict" as const,
+        mood: "balanced" as SongMood,
+        density: 0.3,
+        prompt: "Rainy evening lo-fi, soft keys, distant thunder, calm repeating groove.",
+      },
+      night_drive: {
+        source: "predict" as const,
+        mood: "chill" as SongMood,
+        density: 0.2,
+        prompt: "Night drive lo-fi, muted bass, soft pads, neon reflections, slow pulse.",
+      },
+      warm_piano: {
+        source: "predict" as const,
+        mood: "balanced" as SongMood,
+        density: 0.28,
+        prompt: "Warm piano loop, cozy chords, soft swing, inviting and intimate atmosphere.",
+      },
+      dusty_boom_bap: {
+        source: "predict" as const,
+        mood: "energetic" as SongMood,
+        density: 0.36,
+        prompt: "Dusty boom bap lo-fi, mellow chops, crisp drums, vinyl texture, head-nod groove.",
+      },
+    };
+
+    return profiles[(presetId as keyof typeof profiles)] || profiles.study;
+  }
+
+  function nextPreset(current: string) {
+    const index = presetOrder.indexOf(normalizePresetId(current) as (typeof presetOrder)[number]);
+    return presetOrder[(index + 1) % presetOrder.length];
+  }
+
+  function clearLoopTimer() {
+    if (loopTimer !== null) {
+      clearInterval(loopTimer);
+      loopTimer = null;
+    }
+  }
+
+  function syncLoopTimer() {
+    clearLoopTimer();
+    if (!enabled || !loopEnabled) {
+      return;
+    }
+
+    const intervalMs = Math.max(1, loopMinutes) * 60000;
+    loopTimer = window.setInterval(() => {
+      void runLoopRefresh();
+    }, intervalMs);
+  }
+
+  async function applyPresetById(presetId: string) {
+    const profile = getPresetProfile(presetId);
+    selectedPreset = normalizePresetId(presetId);
+    mlSource = profile.source;
+    mlInput = profile.prompt;
+    mood = profile.mood;
+    density = profile.density;
+    await applyMlPreset();
+  }
+
+  async function runLoopRefresh() {
+    if (loopInFlight || isApplyingMl || !enabled || !loopEnabled) {
+      return;
+    }
+
+    loopInFlight = true;
+    try {
+      loopCycles += 1;
+      if (autoCycleStyles && styleShiftEvery > 0 && loopCycles % styleShiftEvery === 0) {
+        selectedPreset = nextPreset(selectedPreset);
+      }
+
+      await applyPresetById(selectedPreset);
+    } finally {
+      loopInFlight = false;
+      syncLoopTimer();
+    }
+  }
+
   function useSamplePrompt() {
     mlSource = "predict";
     mlInput = samplePrompts[Math.floor(Math.random() * samplePrompts.length)];
@@ -190,6 +301,8 @@
       : progression.length || melodies.length || bpmOverride
         ? "ML preset loaded"
         : "No ML preset loaded yet",
+    `${selectedPreset.replace(/_/g, " ")} preset`,
+    loopEnabled ? `Loop ${loopMinutes}m on` : `Loop off`,
     bpmOverride ? `${Math.round(bpmOverride)} BPM` : "Procedural BPM",
     progression.length ? `${progression.length} chords` : "No ML chords",
   ].join(" · ");
@@ -280,6 +393,9 @@
     mlTitle = "";
     mlSource = "predict";
     mlError = "";
+    loopEnabled = false;
+    loopCycles = 0;
+    clearLoopTimer();
     emitConfig(true);
   }
 
@@ -308,12 +424,26 @@
         const restoredUrl = parsed.mlServerUrl || DEFAULT_ML_SERVER;
         mlServerUrl = normalizedServerCandidates(restoredUrl)[0];
         mlInput = parsed.mlInput || mlInput;
+        selectedPreset = normalizePresetId(parsed.selectedPreset);
+        loopEnabled = !!parsed.loopEnabled;
+        loopMinutes = clamp(Number(parsed.loopMinutes ?? 4), 1, 30);
+        autoCycleStyles = parsed.autoCycleStyles === undefined ? true : !!parsed.autoCycleStyles;
+        styleShiftEvery = clamp(Number(parsed.styleShiftEvery ?? 3), 1, 24);
       } catch {
         // Ignore malformed local storage payload.
       }
     }
 
     emitConfig(false);
+    syncLoopTimer();
+
+    return () => {
+      clearLoopTimer();
+    };
+  });
+
+  onDestroy(() => {
+    clearLoopTimer();
   });
 </script>
 
@@ -371,6 +501,20 @@
       <h5>ML Preset</h5>
       <p class="ml-meta">{mlSummary}</p>
     </div>
+
+    <div class="preset-grid">
+      {#each presetOrder as presetId}
+        <button
+          type="button"
+          class:preset-active={selectedPreset === presetId}
+          class="preset-chip"
+          on:click={() => applyPresetById(presetId)}
+        >
+          {presetId.split("_").map((part) => part[0].toUpperCase() + part.slice(1)).join(" ")}
+        </button>
+      {/each}
+    </div>
+
     <div class="field-row">
       <label for="ml-server-url">Server URL</label>
       <input
@@ -420,6 +564,44 @@
       <button class="mini-btn study-btn" type="button" on:click={applyStudyPreset} disabled={isApplyingMl}
         >Generate Study Sound</button
       >
+    </div>
+
+    <div class="loop-panel">
+      <label class="song-toggle compact-toggle">
+        <input type="checkbox" bind:checked={loopEnabled} on:change={() => { emitConfig(false); syncLoopTimer(); }} />
+        <span>Auto-generate a new variation every {loopMinutes} minute{loopMinutes === 1 ? "" : "s"}</span>
+      </label>
+
+      <div class="field-row compact-row">
+        <label for="loop-minutes">Refresh interval: {loopMinutes} min</label>
+        <input
+          id="loop-minutes"
+          type="range"
+          min="3"
+          max="8"
+          step="1"
+          bind:value={loopMinutes}
+          on:change={() => { emitConfig(false); syncLoopTimer(); }}
+        />
+      </div>
+
+      <div class="field-row compact-row">
+        <label for="style-shift-every">Shift style every {styleShiftEvery} cycle{styleShiftEvery === 1 ? "" : "s"}</label>
+        <input
+          id="style-shift-every"
+          type="range"
+          min="1"
+          max="8"
+          step="1"
+          bind:value={styleShiftEvery}
+          on:change={() => emitConfig(false)}
+        />
+      </div>
+
+      <label class="song-toggle compact-toggle">
+        <input type="checkbox" bind:checked={autoCycleStyles} on:change={() => emitConfig(false)} />
+        <span>Rotate between study, rainy, night drive, warm piano, and dusty boom bap</span>
+      </label>
     </div>
 
     <button class="apply ml-apply" on:click={applyMlPreset} disabled={isApplyingMl}>
@@ -520,6 +702,48 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .preset-chip {
+    width: 100%;
+    border-radius: 999px;
+    padding: 7px 10px;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    font-size: 0.8em;
+  }
+
+  .preset-chip.preset-active {
+    background: white;
+    color: black;
+    border-color: white;
+    font-weight: 700;
+  }
+
+  .loop-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .compact-toggle {
+    font-size: 0.8em;
+  }
+
+  .compact-row label {
+    font-size: 0.8em;
   }
 
   .mini-btn {
