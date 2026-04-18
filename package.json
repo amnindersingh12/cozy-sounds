@@ -25,7 +25,10 @@
     "tauri:b": "tauri build",
     "lofi:pipeline": "bash scripts/pipeline/lofi_pipeline.sh",
     "lofi:pipeline:test": "bash scripts/pipeline/lofi_pipeline.sh",
-    "lofi:upload": "python3 scripts/pipeline/upload_to_youtube.py"
+    "lofi:upload": "python3 scripts/pipeline/upload_to_youtube.py",
+    "lofi:youtube": "bash scripts/pipeline/make_youtube_video.sh",
+    "lofi:setup": "bash scripts/pipeline/setup_daily_upload.sh",
+    "lofi:stitch": "bash scripts/pipeline/stitch_and_prep.sh"
   },
   "dependencies": {
     "@tabler/icons-svelte": "^2.17.0",

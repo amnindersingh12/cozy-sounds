@@ -89,7 +89,7 @@ def get_credentials():
 
         flow = InstalledAppFlow.from_client_secrets_file(str(CLIENT_SECRET_PATH), SCOPES)
         # On Oracle VM: use --noauth_local_webserver flow
-        creds = flow.run_local_server(port=0) if _has_display() else flow.run_console()
+        creds = flow.run_local_server(port=8085, open_browser=_has_display())
 
     with open(TOKEN_PATH, "wb") as f:
         pickle.dump(creds, f)

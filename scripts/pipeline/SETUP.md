@@ -140,3 +140,79 @@ sudo apt install fluid-soundfont-gm
 **"quota exceeded"** — lower upload frequency. Edit the timer: `OnUnitActiveSec=4h`
 
 **Token expired** — delete `scripts/pipeline/youtube_token.pickle` and re-run the first-run auth step once.
+
+---
+
+## Bring-Your-Own-Assets mode (`stitch_and_prep.sh`)
+
+Use this when you have pre-made audio clips (from Suno, Udio, ElevenLabs, etc.) and a
+background video (from RunwayML, Pika Labs, Pixabay, lofi.cafe, etc.).
+No Python, no ML server needed — pure FFmpeg.
+
+```bash
+# Basic usage: stitch clips + animated video → 3h MP4 → upload
+bash scripts/pipeline/stitch_and_prep.sh \
+  -a ~/Downloads/suno-clips/ \
+  -b ~/Downloads/anime-bg.mp4
+
+# Still image background, custom channel name, skip upload
+bash scripts/pipeline/stitch_and_prep.sh \
+  -a ./clips/ \
+  -b ./bg.jpg \
+  -t "mysoundpage" \
+  --no-upload
+
+# 4h video, unlisted, skip lofi FX (keep clips as-is)
+bash scripts/pipeline/stitch_and_prep.sh \
+  -a ./clips/ -b ./bg.mp4 \
+  -d 14400 -p unlisted --no-fx
+```
+
+### Options reference
+
+| Flag | Default | Description |
+|---|---|---|
+| `-a / --audio-dir` | **required** | Folder of `.mp3`/`.wav`/`.flac`/`.ogg` clips |
+| `-b / --background` | none | Background `.mp4`/`.mov`/`.webm` (animated) or `.jpg`/`.png`/`.webp` (still) |
+| `-o / --output` | auto-timestamped | Output MP4 path |
+| `-d / --duration` | `10800` | Total seconds (10800 = 3h) |
+| `-t / --title` | `llooffiisounds` | Channel name overlay |
+| `-s / --subtitle` | auto | Subtitle / track name overlay |
+| `-p / --privacy` | `public` | `public` / `unlisted` / `private` |
+| `--no-fx` | off | Skip lofi audio FX (keep clips raw) |
+| `--no-upload` | off | Skip YouTube upload |
+| `--crf` | `23` | Video quality (18=best, 28=smallest) |
+| `--preset` | `slow` | FFmpeg encode speed preset |
+
+### Audio FX applied by default
+
+1. Lowpass @ 3500 Hz (removes harsh highs)
+2. Highpass @ 60 Hz (removes sub-rumble)
+3. Subtle room echo (tape feel)
+4. `atempo=0.97` — slight tape slowdown
+5. Pink noise vinyl crackle (blended at 4.5%)
+
+---
+
+## Animated background support in `generate_lofi_video.py`
+
+The ML-server pipeline now auto-detects your asset type.
+
+Place assets in `public/assets/background/`:
+
+| File type | Render mode |
+|---|---|
+| `.mp4` / `.mov` / `.webm` | **stream_loop -1** — loops the video seamlessly |
+| `.jpg` / `.png` / `.webp` | **Ken Burns** — slow zoom-pan over the still image |
+| *(nothing)* | **Dark gradient fallback** — channel name centered |
+
+Or pass an explicit file with `--background`:
+
+```bash
+python3 scripts/pipeline/generate_lofi_video.py \
+  --background ~/Downloads/anime-rain-loop.mp4 \
+  --duration 10800 \
+  --output output/pipeline/lofi_custom.mp4
+```
+
+**Asset priority order:** `--background` arg → video in `background/` → image in `background/` → dark fallback.

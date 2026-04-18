@@ -1,15 +1,29 @@
 [Unit]
-Description=Lofi Engine YouTube Pipeline
+Description=llooffiisounds — Daily 4K Lofi YouTube Upload
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 User=%i
-WorkingDirectory=/opt/lofi-engine
-ExecStart=/opt/lofi-engine/scripts/pipeline/lofi_pipeline.sh
+WorkingDirectory=/home/ubuntu/Desktop/gitwork/cozy-sounds
+ExecStart=/bin/bash /home/ubuntu/Desktop/gitwork/cozy-sounds/scripts/pipeline/make_youtube_video.sh
 StandardOutput=append:/var/log/lofi_pipeline.log
 StandardError=append:/var/log/lofi_pipeline.log
+Environment=HOME=/home/ubuntu
+Environment=PATH=/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=ML_SERVER_URL=http://localhost:5050
-Environment=LOFI_DURATION=10800
-Environment=LOFI_PRIVACY=public
+Environment=DURATION=10800
+Environment=PRIVACY=public
+# 90 minute timeout — 3h video rendering on ARM can take a while
+TimeoutStartSec=5400
+
+# Auto-retry on failure: up to 3 attempts, 5-minute backoff
+Restart=on-failure
+RestartSec=300
+StartLimitBurst=3
+StartLimitIntervalSec=3600
+
+# Auto-clean old files (keep last 7 days of videos, 1 day of audio)
+ExecStartPost=/usr/bin/find /home/ubuntu/Desktop/gitwork/cozy-sounds/output/pipeline -name "*.mp4" -mtime +7 -delete
+ExecStartPost=/usr/bin/find /home/ubuntu/Desktop/gitwork/cozy-sounds/output/pipeline -name "*.wav" -mtime +1 -delete

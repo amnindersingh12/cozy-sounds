@@ -1,10 +1,13 @@
 [Unit]
-Description=Lofi Engine Pipeline Timer (every 3 hours)
-Requires=lofi-pipeline@%i.service
+Description=llooffiisounds — Daily Upload Timer (once per day at 06:00 UTC)
 
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=3h
+# Run once daily at 06:00 UTC
+OnCalendar=*-*-* 06:00:00
+# Catch up if the machine was off at the scheduled time
+Persistent=true
+# Add random delay up to 15 minutes to avoid exact-second hits
+RandomizedDelaySec=900
 Unit=lofi-pipeline@%i.service
 
 [Install]
