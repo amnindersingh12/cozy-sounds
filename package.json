@@ -42,7 +42,7 @@
     "@sveltejs/vite-plugin-svelte": "^2.0.0",
     "@tauri-apps/cli": "^2.6.1",
     "@tsconfig/svelte": "^3.0.0",
-    "@types/node": "^18.7.10",
+    "@types/node": "^26.6.6",
     "obs-websocket-js": "^5.0.8",
     "svelte": "^3.54.0",
     "svelte-check": "^3.0.0",
