@@ -31,7 +31,7 @@
     "lofi:stitch": "bash scripts/pipeline/stitch_and_prep.sh"
   },
   "dependencies": {
-    "@tabler/icons-svelte": "^2.17.0",
+    "@tabler/icons-svelte": "^3.52.0",
     "@tauri-apps/api": "^2.0.0",
     "@tauri-apps/plugin-http": "~2.5.4",
     "@tauri-apps/plugin-shell": "~2.3.1",
