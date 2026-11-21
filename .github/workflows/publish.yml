@@ -2,8 +2,8 @@ name: "publish"
 on:
   workflow_dispatch: # Manual trigger
   push:
-    branches:
-      - 'master'     # Push to master branch trigger
+    tags:
+      - 'v*'         # e.g. git tag v1.2.0 && git push origin v1.2.0
 
 jobs:
   publish-tauri:
