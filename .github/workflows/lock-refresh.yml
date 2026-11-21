@@ -1,0 +1,40 @@
+name: lock-refresh (temporary)
+on:
+  push:
+    branches: [chore/tauri-ts-upgrade]
+    paths: [.github/workflows/lock-refresh.yml]
+permissions:
+  contents: write
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: Update Rust tauri crates
+        working-directory: src-tauri
+        run: cargo update -p tauri -p tauri-build -p tauri-plugin-http -p tauri-plugin-shell
+      - name: Match JS packages to the Rust crate versions
+        run: |
+          v() { awk -v n="$1" '$0=="name = \""n"\""{getline; gsub(/version = |"/,""); print; exit}' src-tauri/Cargo.lock; }
+          HTTP=$(v tauri-plugin-http); SHELL_V=$(v tauri-plugin-shell)
+          echo "http=$HTTP shell=$SHELL_V tauri=$(v tauri)"
+          pnpm add @tauri-apps/api@^2 @tauri-apps/plugin-http@~${HTTP%.*}.0 @tauri-apps/plugin-shell@~${SHELL_V%.*}.0 tslib@^2
+          pnpm add -D @tauri-apps/cli@^2 typescript@^5.9 @tsconfig/svelte@^5
+          sed -i 's/"ignoreDeprecations": "6.0"/"ignoreDeprecations": "5.0"/' tsconfig.json tsconfig.node.json
+      - name: Verify
+        run: |
+          pnpm build
+          (cd src-tauri && cargo check)
+      - name: Commit
+        run: |
+          git config user.name "amnindersingh12"
+          git config user.email "amnindersingh58611@gmail.com"
+          git add package.json pnpm-lock.yaml src-tauri/Cargo.lock tsconfig.json tsconfig.node.json
+          git commit -m "chore: upgrade Tauri (Rust + JS in lockstep), TypeScript 5, @tsconfig/svelte 5" || echo "nothing to commit"
+          git push
